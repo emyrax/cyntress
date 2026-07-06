@@ -1,0 +1,6 @@
+Quick start:
+1. npm install
+2. Set Firebase credentials in .env (already set)
+3. npm run dev (opens http://localhost:5173)
+4. Seed: node scripts/seed-firestore.js
+5. Register at /login, add UID to Firestore admins/{uid} with role: 'admin' to access /admin
