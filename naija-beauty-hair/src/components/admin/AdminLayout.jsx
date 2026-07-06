@@ -9,6 +9,7 @@ const iconMap = {
   Tags: '🏷️',
   Image: '🖼️',
   ShoppingCart: '🛒',
+  Key: '🔑',
   Search: '🔍',
   File: '📄',
   Users: '👤',

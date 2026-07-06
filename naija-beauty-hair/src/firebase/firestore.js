@@ -4,6 +4,7 @@ import {
   getDoc,
   getDocs,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -25,6 +26,7 @@ const collections = {
   admins: () => collection(db, 'admins'),
   seoSettings: () => collection(db, 'seo_settings'),
   pages: () => collection(db, 'pages'),
+  apiKeys: () => collection(db, 'api_keys'),
 }
 
 export async function getDocument(collectionName, id) {
@@ -36,6 +38,13 @@ export async function getDocuments(collectionName, constraints = []) {
   const q = query(collections[collectionName](), ...constraints)
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+export async function setDocument(collectionName, id, data) {
+  await setDoc(doc(db, collectionName, id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  }, { merge: true })
 }
 
 export async function addDocument(collectionName, data) {

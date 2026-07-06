@@ -1,4 +1,6 @@
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+import { getDocument } from '../firebase/firestore'
+
+const keyCache = {}
 
 const PROMPTS = {
   enhance: `Improve the following text for clarity, professionalism, and brand voice. Make it compelling and well-structured. Return only the improved text without any prefixes or explanations:\n\n`,
@@ -8,6 +10,20 @@ const PROMPTS = {
   seoRewrite: `Rewrite this text for SEO. Include relevant high-intent buying keywords naturally, improve readability, and maintain a compelling tone. Return only the rewritten text:\n\n`,
   shorten: `Condense the following text while preserving all key information. Make it concise and scannable. Return only the shortened text:\n\n`,
   grammar: `Fix any grammar, spelling, and punctuation issues. Improve sentence flow without changing meaning or length significantly. Return only the corrected text:\n\n`,
+}
+
+async function getProviderKey(provider) {
+  if (keyCache[provider]) return keyCache[provider]
+  try {
+    const doc = await getDocument('api_keys', provider)
+    if (doc?.key) {
+      keyCache[provider] = doc.key
+      return doc.key
+    }
+  } catch (_) {}
+  const envKey = import.meta.env[`VITE_${provider.toUpperCase()}_API_KEY`]
+  if (envKey) keyCache[provider] = envKey
+  return envKey || null
 }
 
 async function callChromeAI(prompt) {
@@ -22,9 +38,10 @@ async function callChromeAI(prompt) {
 }
 
 async function callGeminiAPI(prompt) {
-  if (!GEMINI_API_KEY) throw new Error('no key')
+  const key = await getProviderKey('gemini')
+  if (!key) throw new Error('no key')
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,7 +132,7 @@ Give concise recommendations in plain English. Focus on practical fixes.`
     const aiSuggestions = await callAI(aiPrompt)
     summary.recommendations = aiSuggestions
   } catch {
-    summary.recommendations = 'Add a Gemini API key to .env for AI-powered recommendations.'
+    summary.recommendations = 'Configure a Gemini API key in API Keys settings for AI-powered recommendations.'
   }
 
   return summary

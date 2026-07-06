@@ -32,6 +32,7 @@ import BannerForm from './pages/admin/banners/BannerForm'
 import OrderList from './pages/admin/orders/OrderList'
 import SEOSettings from './pages/admin/seo/SEOSettings'
 import PageEditor from './pages/admin/pages/PageEditor'
+import ApiKeys from './pages/admin/settings/ApiKeys'
 import AdminUsers from './pages/admin/admins/AdminUsers'
 import CategoryList from './pages/admin/categories/CategoryList'
 import CategoryForm from './pages/admin/categories/CategoryForm'
@@ -84,6 +85,7 @@ function AppRoutes() {
         <Route path="banners/new" element={<BannerForm />} />
         <Route path="banners/:id/edit" element={<BannerForm />} />
         <Route path="orders" element={<OrderList />} />
+        <Route path="api-keys" element={<ApiKeys />} />
         <Route path="seo" element={<SEOSettings />} />
         <Route path="pages" element={<PageEditor />} />
         <Route path="admins" element={<AdminUsers />} />
