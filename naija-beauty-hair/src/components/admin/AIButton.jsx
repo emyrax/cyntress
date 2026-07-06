@@ -13,6 +13,13 @@ const MODE_LABELS = {
   meta: 'Auto Meta Tags',
 }
 
+const FIX_TIPS = {
+  'no key': 'Go to API Keys settings to add a Gemini key.',
+  'unavailable': 'Check your API key or try again later.',
+  'quota': 'Wait a moment or upgrade your API plan.',
+  'network': 'Check your internet connection.',
+}
+
 export default function AIButton({
   modes = ['enhance'],
   fieldValue = '',
@@ -22,6 +29,7 @@ export default function AIButton({
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [errorTip, setErrorTip] = useState(null)
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -32,9 +40,18 @@ export default function AIButton({
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  const getTip = (msg) => {
+    const lower = msg.toLowerCase()
+    for (const [key, tip] of Object.entries(FIX_TIPS)) {
+      if (lower.includes(key)) return tip
+    }
+    return ''
+  }
+
   const handleAction = async (mode) => {
     setLoading(true)
     setError(null)
+    setErrorTip(null)
     setOpen(false)
     try {
       let result
@@ -48,7 +65,8 @@ export default function AIButton({
       onResult(result, mode)
     } catch (err) {
       setError(err.message)
-      setTimeout(() => setError(null), 4000)
+      setErrorTip(getTip(err.message))
+      setTimeout(() => { setError(null); setErrorTip(null) }, 6000)
     } finally {
       setLoading(false)
     }
@@ -68,9 +86,22 @@ export default function AIButton({
 
   if (error) {
     return (
-      <span className={`${baseClass} bg-red-50 text-red-600 border-red-200`} title={error}>
-        ✨ AI Error
-      </span>
+      <div className="relative inline-block">
+        <span className={`${baseClass} bg-red-50 text-red-600 border-red-200 cursor-pointer`} title={error}>
+          ✨ AI Error
+        </span>
+        <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 min-w-[200px]">
+          <p className="text-xs text-red-600 font-medium">{error}</p>
+          {errorTip && <p className="text-xs text-gray-500 mt-1">{errorTip}</p>}
+          <button
+            type="button"
+            onClick={() => { setError(null); setErrorTip(null); handleAction(modes[0]) }}
+            className="mt-2 text-xs text-gold hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
     )
   }
 

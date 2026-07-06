@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { getDocument, addDocument, updateDocument, getDocuments } from '../../../firebase/firestore'
 import { analyzeSEO } from '../../../utils/ai'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const emptySettings = {
   siteTitle: 'Cyntress Luxury',
@@ -15,8 +17,10 @@ const emptySettings = {
 }
 
 export default function SEOSettings() {
+  const toast = useToast()
   const [settings, setSettings] = useState(emptySettings)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -25,10 +29,12 @@ export default function SEOSettings() {
   const [analysisError, setAnalysisError] = useState(null)
 
   useEffect(() => {
-    getDocument('seo_settings', 'global').then((doc) => {
-      if (doc) setSettings({ ...emptySettings, ...doc })
-      setLoading(false)
-    })
+    getDocument('seo_settings', 'global')
+      .then((doc) => {
+        if (doc) setSettings({ ...emptySettings, ...doc })
+      })
+      .catch((err) => setFetchError(friendlyError(err)))
+      .finally(() => setLoading(false))
   }, [])
 
   const update = (field, value) => setSettings((prev) => ({ ...prev, [field]: value }))
@@ -44,9 +50,11 @@ export default function SEOSettings() {
         await addDocument('seo_settings', { ...settings, id: 'global' })
       }
       setSaved(true)
+      toast.success('Settings saved')
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      alert('Error: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
@@ -65,7 +73,8 @@ export default function SEOSettings() {
       const result = await analyzeSEO(products, blogs, pages)
       setAnalysis(result)
     } catch (err) {
-      setAnalysisError(err.message)
+      const e = friendlyError(err)
+      setAnalysisError(e.suggestion ? `${e.message} — ${e.suggestion}` : e.message)
     } finally {
       setAnalyzing(false)
     }
@@ -80,6 +89,13 @@ export default function SEOSettings() {
       <div>
         <h1 className="text-2xl font-serif font-bold text-gray-900 mb-6">SEO Settings</h1>
 
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-700">
+            <p>{fetchError.message}</p>
+            {fetchError.suggestion && <p className="text-xs mt-1">{fetchError.suggestion}</p>}
+          </div>
+        )}
+
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">SEO Analyzer</h2>
@@ -93,9 +109,7 @@ export default function SEOSettings() {
           </div>
 
           {analysisError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-              {analysisError}
-            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-sm text-red-700">{analysisError}</div>
           )}
 
           {analysis && (
@@ -151,26 +165,23 @@ export default function SEOSettings() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+          {/* [Rest of form unchanged — keeps original settings fields] */}
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">Global Meta Defaults</h2>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Site Title</label>
               <input type="text" value={settings.siteTitle} onChange={(e) => update('siteTitle', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
               <p className="text-xs text-gray-500 mt-1">Appended to all page titles: "Page Title – {settings.siteTitle}"</p>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Site Description</label>
               <textarea value={settings.siteDescription} onChange={(e) => update('siteDescription', e.target.value)} rows={2} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold resize-none" />
               <p className="text-xs text-gray-500 mt-1">Default meta description for the homepage</p>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">OG Image (default)</label>
               <input type="url" value={settings.ogImage} onChange={(e) => update('ogImage', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" placeholder="https://..." />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Favicon URL</label>
               <input type="url" value={settings.favicon} onChange={(e) => update('favicon', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
@@ -179,7 +190,6 @@ export default function SEOSettings() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">Social & Analytics</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Twitter Handle</label>

@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { getDocument, addDocument, updateDocument } from '../../../firebase/firestore'
 import MediaUploader from '../../../components/admin/MediaUploader'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const emptyBanner = {
   desktopImage: '',
@@ -18,32 +20,54 @@ export default function BannerForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
+  const toast = useToast()
   const [banner, setBanner] = useState(emptyBanner)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (!isEdit) return
-    getDocument('banners', id).then((doc) => {
-      if (doc) setBanner({ ...emptyBanner, ...doc })
-      setLoading(false)
-    })
+    getDocument('banners', id)
+      .then((doc) => {
+        if (doc) setBanner({ ...emptyBanner, ...doc })
+      })
+      .catch((err) => {
+        const e = friendlyError(err)
+        toast.error(e.message, e.suggestion)
+      })
+      .finally(() => setLoading(false))
   }, [id, isEdit])
 
-  const update = (field, value) => setBanner((prev) => ({ ...prev, [field]: value }))
+  const update = (field, value) => {
+    setErrors((prev) => ({ ...prev, [field]: '' }))
+    setBanner((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const validate = () => {
+    const errs = {}
+    if (!banner.title?.trim()) errs.title = 'Title is required'
+    if (banner.ctaLink && !banner.ctaLink.startsWith('/') && !banner.ctaLink.startsWith('http')) errs.ctaLink = 'Link must start with / or http'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validate()) return
     setSaving(true)
     try {
       if (isEdit) {
         await updateDocument('banners', id, banner)
+        toast.success('Banner updated')
       } else {
         await addDocument('banners', banner)
+        toast.success('Banner created')
       }
       navigate('/admin/banners')
     } catch (err) {
-      alert('Error: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
@@ -66,8 +90,9 @@ export default function BannerForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input type="text" value={banner.title} onChange={(e) => update('title', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <input type="text" value={banner.title} onChange={(e) => update('title', e.target.value)} className={`w-full border rounded px-3 py-2 text-sm focus:outline-none ${errors.title ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} />
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
@@ -79,7 +104,8 @@ export default function BannerForm() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">CTA Link</label>
-                <input type="text" value={banner.ctaLink} onChange={(e) => update('ctaLink', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                <input type="text" value={banner.ctaLink} onChange={(e) => update('ctaLink', e.target.value)} className={`w-full border rounded px-3 py-2 text-sm focus:outline-none ${errors.ctaLink ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} />
+                {errors.ctaLink && <p className="text-xs text-red-500 mt-1">{errors.ctaLink}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { getDocuments, setDocument, deleteDocument, getDocument } from '../../../firebase/firestore'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
@@ -11,26 +13,39 @@ const PROVIDERS = [
 export default function ApiKeys() {
   const [keys, setKeys] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ provider: 'gemini', key: '', label: '' })
   const [saving, setSaving] = useState(false)
   const [showKey, setShowKey] = useState(false)
-  const [revealed, setRevealed] = useState({})
+  const toast = useToast()
 
   useEffect(() => { loadKeys() }, [])
 
   const loadKeys = async () => {
     setLoading(true)
-    const docs = await getDocuments('apiKeys')
-    setKeys(docs)
-    setLoading(false)
+    setFetchError(null)
+    try {
+      const docs = await getDocuments('apiKeys')
+      setKeys(docs)
+    } catch (err) {
+      setFetchError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const startEdit = async (provider) => {
-    const doc = await getDocument('api_keys', provider)
-    if (doc) {
-      setForm({ provider: doc.id, key: doc.key || '', label: doc.label || '' })
-      setEditing(doc.id)
+    try {
+      const doc = await getDocument('api_keys', provider)
+      if (doc) {
+        setForm({ provider: doc.id, key: '', label: doc.label || '' })
+        setEditing(doc.id)
+        setShowKey(false)
+      }
+    } catch (err) {
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     }
   }
 
@@ -47,7 +62,10 @@ export default function ApiKeys() {
   }
 
   const handleSave = async () => {
-    if (!form.key?.trim()) return alert('API key is required')
+    if (!form.key?.trim()) {
+      toast.warning('API key is required', 'Paste your API key before saving.')
+      return
+    }
     setSaving(true)
     try {
       const provider = editing === 'new' ? form.provider : editing
@@ -56,10 +74,12 @@ export default function ApiKeys() {
         label: form.label || PROVIDERS.find(p => p.value === provider)?.label || provider,
         enabled: true,
       })
+      toast.success('API key saved')
       cancel()
       await loadKeys()
     } catch (err) {
-      alert('Error saving: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
@@ -67,14 +87,31 @@ export default function ApiKeys() {
 
   const handleDelete = async (provider, label) => {
     if (!confirm(`Delete API key for "${label || provider}"?`)) return
-    await deleteDocument('api_keys', provider)
-    await loadKeys()
+    const prev = keys
+    setKeys((p) => p.filter((k) => k.id !== provider))
+    try {
+      await deleteDocument('api_keys', provider)
+      toast.success('API key removed')
+    } catch (err) {
+      setKeys(prev)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
+    }
   }
 
   const maskKey = (key) => {
     if (!key) return 'Not configured'
+    if (key.length < 12) return key.slice(0, 4) + '••••'
     return key.slice(0, 6) + '••••' + key.slice(-4)
   }
+
+  const skeleton = (
+    <div className="space-y-3">
+      {[1, 2, 3].map(i => <div key={i} className="h-16 bg-gray-200 rounded animate-pulse" />)}
+    </div>
+  )
+
+  if (loading) return skeleton
 
   return (
     <>
@@ -82,10 +119,15 @@ export default function ApiKeys() {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-serif font-bold text-gray-900">API Keys</h1>
-          {!editing && (
-            <button onClick={startNew} className="bg-ink text-white px-4 py-2 text-sm font-medium rounded hover:bg-ink-light transition-colors">+ Add Key</button>
-          )}
+          {!editing && <button onClick={startNew} className="bg-ink text-white px-4 py-2 text-sm font-medium rounded hover:bg-ink-light transition-colors">+ Add Key</button>}
         </div>
+
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-sm text-red-700">
+            <p>{fetchError.message}</p>
+            {fetchError.suggestion && <p className="text-xs mt-1">{fetchError.suggestion}</p>}
+          </div>
+        )}
 
         {editing ? (
           <div className="max-w-lg bg-white rounded-lg border border-gray-200 p-6 space-y-4">
@@ -121,16 +163,11 @@ export default function ApiKeys() {
                   placeholder={editing !== 'new' ? 'Leave blank to keep current key' : 'Paste your API key'}
                   className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-gold"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="px-3 py-2 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                  title={showKey ? 'Hide' : 'Show'}
-                >
+                <button type="button" onClick={() => setShowKey(!showKey)} className="px-3 py-2 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors">
                   {showKey ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Stored encrypted at rest in Firestore. Visible only to admins.</p>
+              <p className="text-xs text-gray-500 mt-1">Stored in Firestore. Visible only to admins.</p>
             </div>
 
             <div className="flex gap-3 pt-2">
@@ -139,10 +176,6 @@ export default function ApiKeys() {
               </button>
               <button onClick={cancel} className="px-6 py-2.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors">Cancel</button>
             </div>
-          </div>
-        ) : loading ? (
-          <div className="animate-pulse space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="h-16 bg-gray-200 rounded" />)}
           </div>
         ) : (
           <div className="space-y-3">
@@ -158,17 +191,13 @@ export default function ApiKeys() {
                         {hasKey ? maskKey(stored.key) : <span className="text-gray-400 italic">Not configured</span>}
                       </p>
                     </div>
-                    {hasKey && (
-                      <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-700">Active</span>
-                    )}
+                    {hasKey && <span className="text-[10px] font-medium uppercase px-1.5 py-0.5 rounded bg-green-100 text-green-700">Active</span>}
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => startEdit(provider.value)} className="text-xs text-gold hover:underline">
                       {hasKey ? 'Edit' : 'Add Key'}
                     </button>
-                    {hasKey && (
-                      <button onClick={() => handleDelete(provider.value, provider.label)} className="text-xs text-red-500 hover:underline">Remove</button>
-                    )}
+                    {hasKey && <button onClick={() => handleDelete(provider.value, provider.label)} className="text-xs text-red-500 hover:underline">Remove</button>}
                   </div>
                 </div>
               )

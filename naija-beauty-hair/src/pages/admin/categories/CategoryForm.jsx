@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { getDocument, addDocument, updateDocument } from '../../../firebase/firestore'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const typeLabels = { product: 'Product', blog: 'Blog' }
 
@@ -16,19 +18,27 @@ export default function CategoryForm() {
   const { type, id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
+  const toast = useToast()
   const [category, setCategory] = useState({ ...emptyCategory, type })
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     if (!isEdit) return
-    getDocument('categories', id).then((doc) => {
-      if (doc) setCategory({ ...emptyCategory, ...doc })
-      setLoading(false)
-    })
+    getDocument('categories', id)
+      .then((doc) => {
+        if (doc) setCategory({ ...emptyCategory, ...doc })
+      })
+      .catch((err) => {
+        const e = friendlyError(err)
+        toast.error(e.message, e.suggestion)
+      })
+      .finally(() => setLoading(false))
   }, [id, isEdit])
 
   const update = (field, value) => {
+    setErrors((prev) => ({ ...prev, [field]: '' }))
     setCategory((prev) => {
       const updated = { ...prev, [field]: value }
       if (field === 'name' && !isEdit) {
@@ -38,18 +48,30 @@ export default function CategoryForm() {
     })
   }
 
+  const validate = () => {
+    const errs = {}
+    if (!category.name?.trim()) errs.name = 'Name is required'
+    if (category.slug && !/^[a-z0-9-]+$/.test(category.slug)) errs.slug = 'Slug can only contain lowercase letters, numbers, and hyphens'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validate()) return
     setSaving(true)
     try {
       if (isEdit) {
         await updateDocument('categories', id, category)
+        toast.success('Category updated')
       } else {
         await addDocument('categories', category)
+        toast.success('Category created')
       }
       navigate(`/admin/categories/${type}`)
     } catch (err) {
-      alert('Error saving category: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
@@ -72,12 +94,14 @@ export default function CategoryForm() {
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-              <input type="text" value={category.name} onChange={(e) => update('name', e.target.value)} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+              <input type="text" value={category.name} onChange={(e) => update('name', e.target.value)} required className={`w-full border rounded px-3 py-2 text-sm focus:outline-none ${errors.name ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} />
+              {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Slug</label>
-              <input type="text" value={category.slug} onChange={(e) => update('slug', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold bg-gray-50 text-gray-500" readOnly={!isEdit} />
-              <p className="text-xs text-gray-500 mt-1">Auto-generated from name. Edit after saving if needed.</p>
+              <input type="text" value={category.slug} onChange={(e) => update('slug', e.target.value)} className={`w-full border rounded px-3 py-2 text-sm ${isEdit ? '' : 'bg-gray-50 text-gray-500'} focus:outline-none ${errors.slug ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} readOnly={!isEdit} />
+              {errors.slug && <p className="text-xs text-red-500 mt-1">{errors.slug}</p>}
+              {!isEdit && <p className="text-xs text-gray-500 mt-1">Auto-generated from name. Can be edited after saving.</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Display Order</label>

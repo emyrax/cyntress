@@ -4,23 +4,36 @@ import { Helmet } from 'react-helmet-async'
 import { getDocuments, deleteDocument } from '../../../firebase/firestore'
 import DataTable from '../../../components/admin/DataTable'
 import Badge from '../../../components/ui/Badge'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 export default function ProductList() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const navigate = useNavigate()
+  const toast = useToast()
 
   useEffect(() => {
     getDocuments('products')
       .then(setProducts)
+      .catch((err) => setFetchError(friendlyError(err)))
       .finally(() => setLoading(false))
   }, [])
 
-  const handleDelete = async (id, e) => {
+  const handleDelete = async (id, title, e) => {
     e.stopPropagation()
-    if (!confirm('Delete this product?')) return
-    await deleteDocument('products', id)
-    setProducts((prev) => prev.filter((p) => p.id !== id))
+    if (!confirm(`Delete "${title}"?`)) return
+    const prev = products
+    setProducts((p) => p.filter((pr) => pr.id !== id))
+    try {
+      await deleteDocument('products', id)
+      toast.success('Product deleted')
+    } catch (err) {
+      setProducts(prev)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
+    }
   }
 
   const columns = [
@@ -34,26 +47,21 @@ export default function ProductList() {
     { key: 'priceMin', label: 'Price', sortable: true, render: (val) => val ? `₦${val.toLocaleString()}` : '-' },
     { key: 'status', label: 'Status', render: (_, row) => {
       const allSold = row.variants?.every(v => !v.available)
-      if (allSold) return <Badge variant="soldOut">Sold Out</Badge>
-      return <Badge variant="published">Active</Badge>
+      return allSold ? <Badge variant="soldOut">Sold Out</Badge> : <Badge variant="published">Active</Badge>
     }},
     { key: 'actions', label: 'Actions', render: (_, row) => (
       <div className="flex gap-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); navigate(`/admin/products/${row.id}/edit`) }}
-          className="text-xs text-gold hover:underline"
-        >
-          Edit
-        </button>
-        <button
-          onClick={(e) => handleDelete(row.id, e)}
-          className="text-xs text-red-500 hover:underline"
-        >
-          Delete
-        </button>
+        <button onClick={(e) => { e.stopPropagation(); navigate(`/admin/products/${row.id}/edit`) }} className="text-xs text-gold hover:underline">Edit</button>
+        <button onClick={(e) => handleDelete(row.id, row.title, e)} className="text-xs text-red-500 hover:underline">Delete</button>
       </div>
     )},
   ]
+
+  const skeleton = (
+    <div className="space-y-3">
+      {[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-gray-200 rounded animate-pulse" />)}
+    </div>
+  )
 
   return (
     <>
@@ -61,23 +69,11 @@ export default function ProductList() {
       <div>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-serif font-bold text-gray-900">Products</h1>
-          <Link
-            to="/admin/products/new"
-            className="bg-ink text-white px-4 py-2 text-sm font-medium rounded hover:bg-ink-light transition-colors"
-          >
-            + Add Product
-          </Link>
+          <Link to="/admin/products/new" className="bg-ink text-white px-4 py-2 text-sm font-medium rounded hover:bg-ink-light transition-colors">+ Add Product</Link>
         </div>
-
-        <DataTable
-          columns={columns}
-          data={products}
-          searchable
-          searchKeys={['title', 'category']}
-          paginated
-          pageSize={15}
-          onRowClick={(row) => navigate(`/admin/products/${row.id}/edit`)}
-        />
+        {loading ? skeleton : (
+          <DataTable columns={columns} data={products} error={fetchError} searchable searchKeys={['title', 'category']} paginated pageSize={15} onRowClick={(row) => navigate(`/admin/products/${row.id}/edit`)} />
+        )}
       </div>
     </>
   )

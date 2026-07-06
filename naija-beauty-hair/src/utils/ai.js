@@ -2,6 +2,8 @@ import { getDocument } from '../firebase/firestore'
 
 const keyCache = {}
 
+const FETCH_TIMEOUT = 15000
+
 const PROMPTS = {
   enhance: `Improve the following text for clarity, professionalism, and brand voice. Make it compelling and well-structured. Return only the improved text without any prefixes or explanations:\n\n`,
   sales: `Rewrite the following as persuasive sales copy for luxury human hair wigs. Use emotional triggers, highlight benefits over features, create urgency, and maintain a luxury brand tone. Return only the rewritten text:\n\n`,
@@ -26,11 +28,18 @@ async function getProviderKey(provider) {
   return envKey || null
 }
 
+function fetchWithTimeout(url, options, timeout = FETCH_TIMEOUT) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+}
+
 async function callChromeAI(prompt) {
   const ai = window.ai
-  if (!ai?.languageModel) throw new Error('not available')
+  if (!ai?.languageModel) throw new Error('Chrome Built-in AI is not available in this browser')
   const capabilities = await ai.languageModel.capabilities()
-  if (capabilities.available !== 'readily') throw new Error('not ready')
+  if (capabilities.available !== 'readily') throw new Error('Chrome Built-in AI is not ready. Try again later.')
   const session = await ai.languageModel.create()
   const result = await session.prompt(prompt)
   session.destroy()
@@ -39,19 +48,27 @@ async function callChromeAI(prompt) {
 
 async function callGeminiAPI(prompt) {
   const key = await getProviderKey('gemini')
-  if (!key) throw new Error('no key')
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
-      }),
-    }
-  )
-  if (!res.ok) throw new Error(await res.text())
+  if (!key) throw new Error('No Gemini API key configured')
+  let res
+  try {
+    res = await fetchWithTimeout(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+        }),
+      }
+    )
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out. Check your internet connection.')
+    throw new Error('Network error. Check your internet connection.')
+  }
+  if (res.status === 429) throw new Error('API quota exceeded. Wait a moment or upgrade your plan.')
+  if (res.status === 403) throw new Error('API key is invalid or restricted. Check your API Keys settings.')
+  if (!res.ok) throw new Error('API request failed. Try again later.')
   const data = await res.json()
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 }
@@ -63,16 +80,17 @@ async function callAI(prompt) {
   try {
     return await callGeminiAPI(prompt)
   } catch (_) {}
-  throw new Error('AI unavailable')
+  throw new Error('AI unavailable. Configure a Gemini API key in API Keys settings.')
 }
 
 export async function enhanceText(text, mode = 'enhance') {
-  if (!text?.trim()) throw new Error('No text to enhance')
+  if (!text?.trim()) throw new Error('No text to enhance. Write some content first.')
   const prompt = PROMPTS[mode] || PROMPTS.enhance
   return callAI(prompt + text)
 }
 
 export async function generateMetaTags(title, content) {
+  if (!title?.trim() && !content?.trim()) throw new Error('No content to generate meta tags from.')
   const prompt = `Based on this content, generate an SEO meta title (max 60 chars) and meta description (max 160 chars) for a luxury hair wig brand. Return ONLY valid JSON with "title" and "description" keys, no markdown or other text:\n\nTitle: ${title}\nContent: ${content || title}`
   const result = await callAI(prompt)
   try {
@@ -84,7 +102,7 @@ export async function generateMetaTags(title, content) {
 }
 
 export async function generateExcerpt(content) {
-  if (!content?.trim()) throw new Error('No content to summarize')
+  if (!content?.trim()) throw new Error('No content to summarize. Write the post content first.')
   const prompt = `Write a compelling 2-3 sentence excerpt/summary for a blog post. Capture the essence and entice readers to click. Return only the excerpt:\n\n${content}`
   return callAI(prompt)
 }

@@ -7,6 +7,8 @@ import MediaUploader from '../../../components/admin/MediaUploader'
 import SEOFields from '../../../components/admin/SEOFields'
 import RichTextEditor from '../../../components/admin/RichTextEditor'
 import AIButton from '../../../components/admin/AIButton'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const emptyPost = {
   title: '',
@@ -25,25 +27,34 @@ export default function PostForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
+  const toast = useToast()
   const [post, setPost] = useState(emptyPost)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [categories, setCategories] = useState([])
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     getDocuments('categories', [where('type', '==', 'blog'), orderBy('order', 'asc')])
       .then(setCategories)
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!isEdit) return
-    getDocument('blogs', id).then((doc) => {
-      if (doc) setPost({ ...emptyPost, ...doc, seo: doc.seo || emptyPost.seo })
-      setLoading(false)
-    })
+    getDocument('blogs', id)
+      .then((doc) => {
+        if (doc) setPost({ ...emptyPost, ...doc, seo: doc.seo || emptyPost.seo })
+      })
+      .catch((err) => {
+        const e = friendlyError(err)
+        toast.error(e.message, e.suggestion)
+      })
+      .finally(() => setLoading(false))
   }, [id, isEdit])
 
   const update = (field, value) => {
+    setErrors((prev) => ({ ...prev, [field]: '' }))
     setPost((prev) => {
       const updated = { ...prev, [field]: value }
       if (field === 'title' && !isEdit) {
@@ -52,6 +63,14 @@ export default function PostForm() {
       }
       return updated
     })
+  }
+
+  const validate = () => {
+    const errs = {}
+    if (!post.title?.trim()) errs.title = 'Title is required'
+    if (!post.content?.replace(/<[^>]*>/g, '').trim()) errs.content = 'Content is required'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
   }
 
   const handleAIResult = (result, mode) => {
@@ -66,6 +85,7 @@ export default function PostForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validate()) return
     setSaving(true)
 
     const data = {
@@ -76,12 +96,15 @@ export default function PostForm() {
     try {
       if (isEdit) {
         await updateDocument('blogs', id, data)
+        toast.success('Post updated')
       } else {
         await addDocument('blogs', data)
+        toast.success('Post created')
       }
       navigate('/admin/posts')
     } catch (err) {
-      alert('Error saving post: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
@@ -106,7 +129,8 @@ export default function PostForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                <input type="text" value={post.title} onChange={(e) => update('title', e.target.value)} required className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                <input type="text" value={post.title} onChange={(e) => update('title', e.target.value)} required className={`w-full border rounded px-3 py-2 text-sm focus:outline-none ${errors.title ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} />
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
@@ -140,10 +164,11 @@ export default function PostForm() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700">Content</label>
+                <label className="block text-sm font-medium text-gray-700">Content *</label>
                 <AIButton modes={['enhance', 'sales', 'shorten', 'grammar', 'seoRewrite']} fieldValue={post.content} contextTitle={post.title} onResult={handleAIResult} />
               </div>
               <RichTextEditor value={post.content} onChange={(v) => update('content', v)} minHeight="400px" />
+              {errors.content && <p className="text-xs text-red-500 mt-1">{errors.content}</p>}
             </div>
           </div>
 

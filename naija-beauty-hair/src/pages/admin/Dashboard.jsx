@@ -1,35 +1,40 @@
 import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { getDocuments } from '../../firebase/firestore'
+import { friendlyError } from '../../utils/errors'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ products: 0, orders: 0, revenue: 0, subscribers: 0 })
   const [recentOrders, setRecentOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
 
   useEffect(() => {
     Promise.all([
       getDocuments('products'),
       getDocuments('orders'),
       getDocuments('newsletters'),
-    ]).then(([products, orders, newsletters]) => {
-      const totalRevenue = orders
-        .filter(o => o.paymentStatus === 'paid')
-        .reduce((sum, o) => sum + (o.subtotal || 0), 0)
+    ])
+      .then(([products, orders, newsletters]) => {
+        const totalRevenue = orders
+          .filter(o => o.paymentStatus === 'paid')
+          .reduce((sum, o) => sum + (o.subtotal || 0), 0)
 
-      setStats({
-        products: products.length,
-        orders: orders.length,
-        revenue: totalRevenue,
-        subscribers: newsletters.length,
+        setStats({
+          products: products.length,
+          orders: orders.length,
+          revenue: totalRevenue,
+          subscribers: newsletters.length,
+        })
+
+        setRecentOrders(
+          orders
+            .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+            .slice(0, 5)
+        )
       })
-
-      setRecentOrders(
-        orders
-          .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
-          .slice(0, 5)
-      )
-    }).finally(() => setLoading(false))
+      .catch((err) => setFetchError(friendlyError(err)))
+      .finally(() => setLoading(false))
   }, [])
 
   const cards = [
@@ -45,6 +50,18 @@ export default function Dashboard() {
     shipped: 'bg-blue-100 text-blue-800',
     delivered: 'bg-green-100 text-green-800',
     cancelled: 'bg-red-100 text-red-800',
+  }
+
+  if (fetchError) {
+    return (
+      <>
+        <Helmet><title>Dashboard – Cyntress Luxury Admin</title></Helmet>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <p className="text-sm text-red-700 font-medium">{fetchError.message}</p>
+          {fetchError.suggestion && <p className="text-xs text-red-500 mt-1">{fetchError.suggestion}</p>}
+        </div>
+      </>
+    )
   }
 
   return (

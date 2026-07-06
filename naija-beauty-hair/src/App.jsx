@@ -3,6 +3,8 @@ import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { AdminProvider } from './context/AdminContext'
 import { useMarketingParams } from './hooks/useMarketingParams'
+import { ToastProvider } from './components/ui/Toast'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 import AnnouncementBar from './components/layout/AnnouncementBar'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
@@ -73,7 +75,7 @@ function AppRoutes() {
       <Route path="/ip-rights" element={<PublicLayout><GenericPage /></PublicLayout>} />
       <Route path="/share-rewards" element={<PublicLayout><GenericPage /></PublicLayout>} />
 
-      <Route path="/admin" element={<AdminProvider><AdminLayout /></AdminProvider>}>
+      <Route path="/admin" element={<AdminProvider><ErrorBoundary><ToastProvider><AdminLayout /></ToastProvider></ErrorBoundary></AdminProvider>}>
         <Route index element={<Dashboard />} />
         <Route path="products" element={<ProductList />} />
         <Route path="products/new" element={<ProductForm />} />

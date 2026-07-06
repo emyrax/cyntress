@@ -7,6 +7,8 @@ import MediaUploader from '../../../components/admin/MediaUploader'
 import SEOFields from '../../../components/admin/SEOFields'
 import RichTextEditor from '../../../components/admin/RichTextEditor'
 import AIButton from '../../../components/admin/AIButton'
+import { useToast } from '../../../components/ui/Toast'
+import { friendlyError } from '../../../utils/errors'
 
 const emptyProduct = {
   title: '',
@@ -30,32 +32,41 @@ export default function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
+  const toast = useToast()
   const [product, setProduct] = useState(emptyProduct)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [categories, setCategories] = useState([])
+  const [errors, setErrors] = useState({})
 
   useEffect(() => {
     getDocuments('categories', [where('type', '==', 'product'), orderBy('order', 'asc')])
       .then(setCategories)
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!isEdit) return
-    getDocument('products', id).then((doc) => {
-      if (doc) {
-        setProduct({
-          ...emptyProduct,
-          ...doc,
-          seo: doc.seo || emptyProduct.seo,
-          variants: doc.variants || emptyProduct.variants,
-        })
-      }
-      setLoading(false)
-    })
+    getDocument('products', id)
+      .then((doc) => {
+        if (doc) {
+          setProduct({
+            ...emptyProduct,
+            ...doc,
+            seo: doc.seo || emptyProduct.seo,
+            variants: doc.variants || emptyProduct.variants,
+          })
+        }
+      })
+      .catch((err) => {
+        const e = friendlyError(err)
+        toast.error(e.message, e.suggestion)
+      })
+      .finally(() => setLoading(false))
   }, [id, isEdit])
 
   const update = (field, value) => {
+    setErrors((prev) => ({ ...prev, [field]: '' }))
     setProduct((prev) => {
       const updated = { ...prev, [field]: value }
 
@@ -93,6 +104,15 @@ export default function ProductForm() {
     update('variants', product.variants.filter((_, i) => i !== index))
   }
 
+  const validate = () => {
+    const errs = {}
+    if (!product.title?.trim()) errs.title = 'Title is required'
+    const hasPrice = product.variants.some((v) => v.price > 0)
+    if (!hasPrice) errs.variants = 'At least one variant must have a price > 0'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
   const handleAIResult = (result, mode) => {
     if (mode === 'meta') {
       update('seo', { ...product.seo, ...result })
@@ -103,6 +123,7 @@ export default function ProductForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validate()) return
     setSaving(true)
 
     const data = {
@@ -113,20 +134,21 @@ export default function ProductForm() {
     try {
       if (isEdit) {
         await updateDocument('products', id, data)
+        toast.success('Product updated')
       } else {
         await addDocument('products', data)
+        toast.success('Product created')
       }
       navigate('/admin/products')
     } catch (err) {
-      alert('Error saving product: ' + err.message)
+      const e = friendlyError(err)
+      toast.error(e.message, e.suggestion)
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
-    return <div className="animate-pulse h-96 bg-gray-200 rounded" />
-  }
+  if (loading) return <div className="animate-pulse h-96 bg-gray-200 rounded" />
 
   return (
     <>
@@ -134,15 +156,8 @@ export default function ProductForm() {
 
       <div>
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-serif font-bold text-gray-900">
-            {isEdit ? 'Edit Product' : 'New Product'}
-          </h1>
-          <button
-            onClick={() => navigate('/admin/products')}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            &larr; Back
-          </button>
+          <h1 className="text-2xl font-serif font-bold text-gray-900">{isEdit ? 'Edit Product' : 'New Product'}</h1>
+          <button onClick={() => navigate('/admin/products')} className="text-sm text-gray-500 hover:text-gray-700">&larr; Back</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl">
@@ -152,22 +167,13 @@ export default function ProductForm() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-                <input
-                  type="text"
-                  value={product.title}
-                  onChange={(e) => update('title', e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                />
+                <input type="text" value={product.title} onChange={(e) => update('title', e.target.value)} required className={`w-full border rounded px-3 py-2 text-sm focus:outline-none ${errors.title ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-gold'}`} />
+                {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
-                  value={product.category}
-                  onChange={(e) => update('category', e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                >
+                <select value={product.category} onChange={(e) => update('category', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
                   <option value="">Select category</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.slug}>{c.name}</option>
@@ -177,33 +183,18 @@ export default function ProductForm() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-                <input
-                  type="text"
-                  value={product.brand}
-                  onChange={(e) => update('brand', e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                />
+                <input type="text" value={product.brand} onChange={(e) => update('brand', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
               </div>
 
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={product.featured}
-                    onChange={(e) => update('featured', e.target.checked)}
-                    className="rounded border-gray-300 text-gold focus:ring-gold"
-                  />
+                  <input type="checkbox" checked={product.featured} onChange={(e) => update('featured', e.target.checked)} className="rounded border-gray-300 text-gold focus:ring-gold" />
                   Featured
                 </label>
                 {product.featured && (
                   <div>
                     <label className="text-sm text-gray-600 mr-2">Order</label>
-                    <input
-                      type="number"
-                      value={product.featuredOrder}
-                      onChange={(e) => update('featuredOrder', parseInt(e.target.value) || 0)}
-                      className="w-20 border border-gray-300 rounded px-2 py-1 text-sm"
-                    />
+                    <input type="number" value={product.featuredOrder} onChange={(e) => update('featuredOrder', parseInt(e.target.value) || 0)} className="w-20 border border-gray-300 rounded px-2 py-1 text-sm" />
                   </div>
                 )}
               </div>
@@ -219,13 +210,7 @@ export default function ProductForm() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-              <input
-                type="text"
-                value={product.tags?.join(', ') || ''}
-                onChange={(e) => update('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
-                placeholder="sale, new, bestseller"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-              />
+              <input type="text" value={product.tags?.join(', ') || ''} onChange={(e) => update('tags', e.target.value.split(',').map(t => t.trim()).filter(Boolean))} placeholder="sale, new, bestseller" className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
               <p className="text-xs text-gray-500 mt-1">Comma-separated tags</p>
             </div>
           </div>
@@ -238,80 +223,40 @@ export default function ProductForm() {
                 <div key={variant.id} className="flex items-end gap-3 p-3 bg-gray-50 rounded border border-gray-200">
                   <div className="flex-1">
                     <label className="block text-xs text-gray-500 mb-1">Title</label>
-                    <input
-                      type="text"
-                      value={variant.title}
-                      onChange={(e) => updateVariant(i, 'title', e.target.value)}
-                      placeholder='e.g. 16"'
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
+                    <input type="text" value={variant.title} onChange={(e) => updateVariant(i, 'title', e.target.value)} placeholder='e.g. 16"' className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                   </div>
                   <div className="w-24">
                     <label className="block text-xs text-gray-500 mb-1">Price (₦)</label>
-                    <input
-                      type="number"
-                      value={variant.price}
-                      onChange={(e) => updateVariant(i, 'price', parseFloat(e.target.value) || 0)}
-                      min={0}
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
+                    <input type="number" value={variant.price} onChange={(e) => updateVariant(i, 'price', parseFloat(e.target.value) || 0)} min={0} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                   </div>
                   <div className="w-24">
                     <label className="block text-xs text-gray-500 mb-1">Compare At</label>
-                    <input
-                      type="number"
-                      value={variant.compareAtPrice || ''}
-                      onChange={(e) => updateVariant(i, 'compareAtPrice', e.target.value ? parseFloat(e.target.value) : null)}
-                      min={0}
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
+                    <input type="number" value={variant.compareAtPrice || ''} onChange={(e) => updateVariant(i, 'compareAtPrice', e.target.value ? parseFloat(e.target.value) : null)} min={0} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                   </div>
                   <div className="w-20">
                     <label className="block text-xs text-gray-500 mb-1">SKU</label>
-                    <input
-                      type="text"
-                      value={variant.sku}
-                      onChange={(e) => updateVariant(i, 'sku', e.target.value)}
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-                    />
+                    <input type="text" value={variant.sku} onChange={(e) => updateVariant(i, 'sku', e.target.value)} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm" />
                   </div>
                   <div className="flex items-center gap-2 pb-1">
                     <label className="flex items-center gap-1 text-xs cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={variant.available}
-                        onChange={(e) => updateVariant(i, 'available', e.target.checked)}
-                        className="rounded border-gray-300 text-gold"
-                      />
+                      <input type="checkbox" checked={variant.available} onChange={(e) => updateVariant(i, 'available', e.target.checked)} className="rounded border-gray-300 text-gold" />
                       Available
                     </label>
                     {product.variants.length > 1 && (
-                      <button type="button" onClick={() => removeVariant(i)} className="text-red-400 hover:text-red-600 text-xs">
-                        ✕
-                      </button>
+                      <button type="button" onClick={() => removeVariant(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+            {errors.variants && <p className="text-xs text-red-500">{errors.variants}</p>}
 
-            <button type="button" onClick={addVariant} className="text-sm text-gold hover:underline">
-              + Add variant
-            </button>
-
-            <div className="text-xs text-gray-500">
-              Price range: ₦{product.priceMin?.toLocaleString()} – ₦{product.priceMax?.toLocaleString()}
-              {product.compareAtPriceMin && ` | Compare at: ₦${product.compareAtPriceMin?.toLocaleString()}`}
-            </div>
+            <button type="button" onClick={addVariant} className="text-sm text-gold hover:underline">+ Add variant</button>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">Images</h2>
-            <MediaUploader
-              images={product.images}
-              onImagesChange={(images) => update('images', images)}
-              path="products"
-            />
+            <MediaUploader images={product.images} onImagesChange={(images) => update('images', images)} path="products" />
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
@@ -319,27 +264,14 @@ export default function ProductForm() {
               <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">SEO</h2>
               <AIButton modes={['meta']} fieldValue={`${product.title}\n\n${product.description?.replace(/<[^>]*>/g, '').slice(0, 1000)}`} contextTitle={product.title} onResult={handleAIResult} />
             </div>
-            <SEOFields
-              seo={product.seo}
-              onChange={(seo) => update('seo', seo)}
-            />
+            <SEOFields seo={product.seo} onChange={(seo) => update('seo', seo)} />
           </div>
 
           <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-ink text-white px-6 py-2.5 text-sm font-semibold rounded hover:bg-ink-light transition-colors disabled:opacity-50"
-            >
+            <button type="submit" disabled={saving} className="bg-ink text-white px-6 py-2.5 text-sm font-semibold rounded hover:bg-ink-light transition-colors disabled:opacity-50">
               {saving ? 'Saving...' : isEdit ? 'Update Product' : 'Create Product'}
             </button>
-            <button
-              type="button"
-              onClick={() => navigate('/admin/products')}
-              className="px-6 py-2.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
+            <button type="button" onClick={() => navigate('/admin/products')} className="px-6 py-2.5 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors">Cancel</button>
           </div>
         </form>
       </div>

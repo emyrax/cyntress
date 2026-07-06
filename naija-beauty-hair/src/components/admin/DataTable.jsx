@@ -9,6 +9,7 @@ export default function DataTable({
   paginated = false,
   pageSize = 20,
   onRowClick,
+  error,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortKey, setSortKey] = useState(null)
@@ -56,6 +57,15 @@ export default function DataTable({
     setSearchQuery(value)
     setCurrentPage(1)
     onSearch?.(value)
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <p className="text-sm text-red-700 font-medium">{error.message || 'Failed to load data'}</p>
+        {error.suggestion && <p className="text-xs text-red-500 mt-1">{error.suggestion}</p>}
+      </div>
+    )
   }
 
   return (

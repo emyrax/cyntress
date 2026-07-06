@@ -1,43 +1,41 @@
 import { useState, useRef } from 'react'
 import { uploadToCloudinary } from '../../utils/cloudinary'
+import { useToast } from '../ui/Toast'
+import { friendlyError } from '../../utils/errors'
 
-export default function MediaUploader({
-  images = [],
-  onImagesChange,
-  maxFiles = 10,
-  maxSizeMB = 5,
-}) {
+export default function MediaUploader({ images = [], onImagesChange, path = 'uploads', maxFiles = 5, maxSizeMB = 5 }) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const inputRef = useRef(null)
+  const toast = useToast()
 
-  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
-  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files)
+    if (!files.length) return
 
-  const handleUpload = async (files) => {
-    const fileList = Array.from(files)
-    if (images.length + fileList.length > maxFiles) {
-      alert(`Maximum ${maxFiles} files allowed`)
+    if (images.length + files.length > maxFiles) {
+      toast.warning(`Maximum ${maxFiles} images allowed`, `You can upload ${maxFiles - images.length} more.`)
       return
     }
 
-    for (const file of fileList) {
-      if (file.size > maxSizeMB * 1024 * 1024) {
-        alert(`File ${file.name} exceeds ${maxSizeMB}MB limit`)
-        continue
-      }
+    const oversized = files.find(f => f.size > maxSizeMB * 1024 * 1024)
+    if (oversized) {
+      toast.warning(`"${oversized.name}" exceeds ${maxSizeMB}MB limit`, 'Compress the image and try again.')
+      return
+    }
 
-      setUploading(true)
+    setUploading(true)
+    setProgress(0)
+
+    for (let i = 0; i < files.length; i++) {
       try {
-        const url = await uploadToCloudinary(
-          file,
-          { cloudName, uploadPreset },
-          (pct) => setProgress(pct)
-        )
-        onImagesChange?.([...images, url])
-      } catch {
-        alert('Upload failed')
+        const url = await uploadToCloudinary(files[i], path)
+        onImagesChange([...images, url])
+      } catch (err) {
+        const e = friendlyError(err)
+        toast.error(`${e.message} — "${files[i].name}"`, e.suggestion)
       }
+      setProgress(((i + 1) / files.length) * 100)
     }
 
     setUploading(false)
@@ -46,74 +44,44 @@ export default function MediaUploader({
   }
 
   const removeImage = (index) => {
-    onImagesChange?.(images.filter((_, i) => i !== index))
-  }
-
-  const moveImage = (from, to) => {
-    const updated = [...images]
-    const [moved] = updated.splice(from, 1)
-    updated.splice(to, 0, moved)
-    onImagesChange?.(updated)
+    onImagesChange(images.filter((_, i) => i !== index))
   }
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {images.map((url, i) => (
-          <div key={i} className="relative group w-24 h-24 bg-gray-100 rounded overflow-hidden border border-gray-200">
-            <img src={url} alt={`Upload ${i}`} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-              {i > 0 && (
-                <button onClick={() => moveImage(i, i - 1)} className="text-white text-xs p-1 hover:bg-white/20 rounded" title="Move left">◀</button>
-              )}
-              {i < images.length - 1 && (
-                <button onClick={() => moveImage(i, i + 1)} className="text-white text-xs p-1 hover:bg-white/20 rounded" title="Move right">▶</button>
-              )}
-              <button onClick={() => removeImage(i)} className="text-red-300 text-xs p-1 hover:bg-white/20 rounded" title="Remove">✕</button>
-            </div>
-            {i === 0 && (
-              <span className="absolute bottom-0 left-0 right-0 bg-ink/80 text-white text-[10px] text-center py-0.5">Main</span>
-            )}
-            {i === 1 && (
-              <span className="absolute bottom-0 left-0 right-0 bg-gray-700/80 text-white text-[10px] text-center py-0.5">Hover</span>
-            )}
+          <div key={i} className="relative w-20 h-20 rounded border border-gray-200 overflow-hidden group">
+            <img src={url} alt="" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => removeImage(i)}
+              className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+            >
+              ✕
+            </button>
           </div>
         ))}
-
         {images.length < maxFiles && (
-          <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded cursor-pointer hover:border-gold hover:bg-gray-50 transition-colors">
-            {uploading ? (
-              <span className="text-xs text-gray-500">{progress}%</span>
-            ) : (
-              <>
-                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="text-[10px] text-gray-400 mt-1">Upload</span>
-              </>
-            )}
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleUpload(e.target.files)}
-              disabled={uploading}
-            />
-          </label>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="w-20 h-20 border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 hover:border-gold hover:text-gold transition-colors text-xl disabled:opacity-50"
+          >
+            {uploading ? '⟳' : '+'}
+          </button>
         )}
       </div>
 
       {uploading && (
         <div className="w-full bg-gray-200 rounded-full h-1.5">
-          <div className="bg-ink h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+          <div className="bg-gold h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
       )}
 
-      <p className="text-xs text-gray-500">
-        {images.length}/{maxFiles} images · Max {maxSizeMB}MB each · First image = main, second = hover
-      </p>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} className="hidden" />
+      <p className="text-xs text-gray-500">Max {maxFiles} images, {maxSizeMB}MB each</p>
     </div>
   )
 }
