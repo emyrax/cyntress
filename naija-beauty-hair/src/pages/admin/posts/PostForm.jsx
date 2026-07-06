@@ -1,9 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { getDocument, addDocument, updateDocument } from '../../../firebase/firestore'
+import { getDocument, addDocument, updateDocument, getCategories } from '../../../firebase/firestore'
+import { query, where, orderBy } from 'firebase/firestore'
+import { getDocuments } from '../../../firebase/firestore'
 import MediaUploader from '../../../components/admin/MediaUploader'
 import SEOFields from '../../../components/admin/SEOFields'
+import RichTextEditor from '../../../components/admin/RichTextEditor'
+import AIButton from '../../../components/admin/AIButton'
 
 const emptyPost = {
   title: '',
@@ -18,10 +22,6 @@ const emptyPost = {
   seo: { title: '', description: '', ogImage: '', slug: '' },
 }
 
-const categories = [
-  'wig-tips', 'hair-care', 'hairstyle', 'cyntress-media', 'product-spotlight', 'customer-reviews',
-]
-
 export default function PostForm() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -29,6 +29,12 @@ export default function PostForm() {
   const [post, setPost] = useState(emptyPost)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [categories, setCategories] = useState([])
+
+  useEffect(() => {
+    getDocuments('categories', [where('type', '==', 'blog'), orderBy('order', 'asc')])
+      .then(setCategories)
+  }, [])
 
   useEffect(() => {
     if (!isEdit) return
@@ -47,6 +53,16 @@ export default function PostForm() {
       }
       return updated
     })
+  }
+
+  const handleAIResult = (result, mode) => {
+    if (mode === 'meta') {
+      update('seo', { ...post.seo, ...result })
+    } else if (mode === 'excerpt') {
+      update('excerpt', result)
+    } else {
+      update('content', result)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -98,7 +114,7 @@ export default function PostForm() {
                 <select value={post.category} onChange={(e) => update('category', e.target.value)} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
                   <option value="">Select category</option>
                   {categories.map((c) => (
-                    <option key={c} value={c}>{c.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+                    <option key={c.id} value={c.slug}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -116,14 +132,19 @@ export default function PostForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Excerpt</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Excerpt</label>
+                <AIButton modes={['excerpt']} fieldValue={post.content} contextTitle={post.title} onResult={handleAIResult} />
+              </div>
               <textarea value={post.excerpt} onChange={(e) => update('excerpt', e.target.value)} rows={2} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold resize-none" />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
-              <textarea value={post.content} onChange={(e) => update('content', e.target.value)} rows={12} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold resize-y font-mono text-xs" placeholder="Write your blog post content here..." />
-              <p className="text-xs text-gray-500 mt-1">Plain text content. Each line becomes a paragraph.</p>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Content</label>
+                <AIButton modes={['enhance', 'sales', 'shorten', 'grammar', 'seoRewrite']} fieldValue={post.content} contextTitle={post.title} onResult={handleAIResult} />
+              </div>
+              <RichTextEditor value={post.content} onChange={(v) => update('content', v)} minHeight="400px" />
             </div>
           </div>
 
@@ -137,7 +158,13 @@ export default function PostForm() {
             />
           </div>
 
-          <SEOFields seo={post.seo} onChange={(seo) => update('seo', seo)} />
+          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">SEO</h2>
+              <AIButton modes={['meta']} fieldValue={`${post.title}\n\n${post.content?.replace(/<[^>]*>/g, '').slice(0, 1000)}`} contextTitle={post.title} onResult={handleAIResult} />
+            </div>
+            <SEOFields seo={post.seo} onChange={(seo) => update('seo', seo)} />
+          </div>
 
           <div className="flex gap-3">
             <button type="submit" disabled={saving} className="bg-ink text-white px-6 py-2.5 text-sm font-semibold rounded hover:bg-ink-light transition-colors disabled:opacity-50">

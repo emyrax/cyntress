@@ -84,6 +84,8 @@ export const adminSidebar = [
   { label: 'Dashboard', path: '/admin', icon: 'LayoutDashboard', roles: ['admin', 'editor'] },
   { label: 'Products', path: '/admin/products', icon: 'Package', roles: ['admin', 'editor'] },
   { label: 'Blog Posts', path: '/admin/posts', icon: 'FileText', roles: ['admin', 'editor'] },
+  { label: 'Product Categories', path: '/admin/categories/product', icon: 'Tags', roles: ['admin'] },
+  { label: 'Blog Categories', path: '/admin/categories/blog', icon: 'Tags', roles: ['admin', 'editor'] },
   { label: 'Banners', path: '/admin/banners', icon: 'Image', roles: ['admin'] },
   { label: 'Orders', path: '/admin/orders', icon: 'ShoppingCart', roles: ['admin'] },
   { label: 'SEO Settings', path: '/admin/seo', icon: 'Search', roles: ['admin'] },

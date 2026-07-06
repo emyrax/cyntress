@@ -33,6 +33,8 @@ import OrderList from './pages/admin/orders/OrderList'
 import SEOSettings from './pages/admin/seo/SEOSettings'
 import PageEditor from './pages/admin/pages/PageEditor'
 import AdminUsers from './pages/admin/admins/AdminUsers'
+import CategoryList from './pages/admin/categories/CategoryList'
+import CategoryForm from './pages/admin/categories/CategoryForm'
 
 function PublicLayout({ children }) {
   return (
@@ -85,6 +87,9 @@ function AppRoutes() {
         <Route path="seo" element={<SEOSettings />} />
         <Route path="pages" element={<PageEditor />} />
         <Route path="admins" element={<AdminUsers />} />
+        <Route path="categories/:type" element={<CategoryList />} />
+        <Route path="categories/:type/new" element={<CategoryForm />} />
+        <Route path="categories/:type/:id/edit" element={<CategoryForm />} />
       </Route>
 
       <Route path="*" element={<PublicLayout><NotFound /></PublicLayout>} />

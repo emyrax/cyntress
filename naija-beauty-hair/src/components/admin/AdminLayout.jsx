@@ -6,6 +6,7 @@ const iconMap = {
   LayoutDashboard: '📊',
   Package: '📦',
   FileText: '📝',
+  Tags: '🏷️',
   Image: '🖼️',
   ShoppingCart: '🛒',
   Search: '🔍',
