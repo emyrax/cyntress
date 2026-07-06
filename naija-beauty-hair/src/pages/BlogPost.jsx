@@ -66,11 +66,7 @@ export default function BlogPost() {
           <img src={post.image} alt={post.title} className="w-full aspect-video object-cover rounded-lg mb-8" />
         )}
 
-        <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed">
-          {post.content?.split('\n').map((line, i) => (
-            line ? <p key={i} className="mb-4">{line}</p> : <br key={i} />
-          ))}
-        </div>
+        <div className="prose prose-gray prose-headings:font-serif max-w-none text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: post.content }} />
 
         <div className="mt-10 pt-6 border-t border-gray-200">
           <Link to="/blog" className="text-gold hover:underline text-sm font-medium">&larr; Back to Blog</Link>

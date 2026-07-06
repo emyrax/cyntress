@@ -1,32 +1,26 @@
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
+import { query, where, orderBy, limit } from 'firebase/firestore'
+import { getDocuments } from '../firebase/firestore'
 import ProductGrid from '../components/product/ProductGrid'
 import CountdownTimer from '../components/ui/CountdownTimer'
 import { useCategoryProducts } from '../hooks/useProducts'
-
-const categoryTitles = {
-  'all': 'All Products',
-  'wigs-on-sale': 'WIGS ON SALE',
-  'glueless-wigs': 'Glueless Wigs',
-  'bob-wig': 'Bob Wig',
-  'straight-wig': 'Bone Straight Wigs',
-  'raw-wavy-wig': 'Raw Wavy Wig',
-  'original-curly-wig': 'Original Curly Wig',
-  'fringe-wig': 'Fringe Wig',
-  'short-cut-wig': 'Short Cut Wig',
-  'headband-wig-1': 'Headband Wig',
-  'hair-bundles': 'Hair Bundles',
-  'wig-combo': 'Wig Combo',
-  'undetectable-lace': 'Royal Lace',
-  'new-in': 'New Arrivals',
-  'hair-tools': 'Hair Tools',
-}
 
 export default function Collection() {
   const { slug = 'all' } = useParams()
   const category = slug === 'all' ? null : slug
   const { products, loading } = useCategoryProducts(category)
-  const title = categoryTitles[slug] || slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  const [catName, setCatName] = useState(null)
+
+  useEffect(() => {
+    if (!category) { setCatName('All Products'); return }
+    getDocuments('categories', [where('slug', '==', category), where('type', '==', 'product'), limit(1)]).then((docs) => {
+      setCatName(docs[0]?.name || null)
+    })
+  }, [category])
+
+  const title = slug === 'all' ? 'All Products' : slug === 'wigs-on-sale' ? 'WIGS ON SALE' : catName || slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
   const isSalePage = slug === 'wigs-on-sale'
 

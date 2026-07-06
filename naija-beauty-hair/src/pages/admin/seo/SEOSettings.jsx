@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { getDocument, addDocument, updateDocument } from '../../../firebase/firestore'
+import { getDocument, addDocument, updateDocument, getDocuments } from '../../../firebase/firestore'
+import { analyzeSEO } from '../../../utils/ai'
 
 const emptySettings = {
   siteTitle: 'Cyntress Luxury',
@@ -18,6 +19,10 @@ export default function SEOSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState(null)
+  const [analysisError, setAnalysisError] = useState(null)
 
   useEffect(() => {
     getDocument('seo_settings', 'global').then((doc) => {
@@ -47,6 +52,25 @@ export default function SEOSettings() {
     }
   }
 
+  const handleAnalyze = useCallback(async () => {
+    setAnalyzing(true)
+    setAnalysisError(null)
+    setAnalysis(null)
+    try {
+      const [products, blogs, pages] = await Promise.all([
+        getDocuments('products'),
+        getDocuments('blogs'),
+        getDocuments('pages'),
+      ])
+      const result = await analyzeSEO(products, blogs, pages)
+      setAnalysis(result)
+    } catch (err) {
+      setAnalysisError(err.message)
+    } finally {
+      setAnalyzing(false)
+    }
+  }, [])
+
   if (loading) return <div className="animate-pulse h-64 bg-gray-200 rounded" />
 
   return (
@@ -55,6 +79,76 @@ export default function SEOSettings() {
 
       <div>
         <h1 className="text-2xl font-serif font-bold text-gray-900 mb-6">SEO Settings</h1>
+
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">SEO Analyzer</h2>
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="inline-flex items-center gap-1.5 bg-gold/10 text-gold border border-gold/30 hover:bg-gold/20 px-4 py-2 text-sm font-medium rounded transition-colors disabled:opacity-50"
+            >
+              {analyzing ? '⟳ Analyzing...' : '✨ Run Site SEO Analysis'}
+            </button>
+          </div>
+
+          {analysisError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+              {analysisError}
+            </div>
+          )}
+
+          {analysis && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+                  <p className="text-2xl font-bold text-gray-900">{analysis.total}</p>
+                  <p className="text-xs text-gray-500 mt-1">Pages Analyzed</p>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+                  <p className={`text-2xl font-bold ${analysis.healthScore >= 80 ? 'text-green-600' : analysis.healthScore >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {analysis.healthScore}%
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Health Score</p>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+                  <p className="text-2xl font-bold text-red-600">{analysis.highPriority}</p>
+                  <p className="text-xs text-gray-500 mt-1">High Priority</p>
+                </div>
+                <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">{analysis.mediumPriority}</p>
+                  <p className="text-xs text-gray-500 mt-1">Medium Priority</p>
+                </div>
+              </div>
+
+              {analysis.issues.length > 0 && (
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <h3 className="text-sm font-semibold text-gray-700">Issues Found ({analysis.issues.length})</h3>
+                  </div>
+                  <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                    {analysis.issues.slice(0, 20).map((issue, i) => (
+                      <div key={i} className="px-4 py-2.5 flex items-start gap-3 text-sm">
+                        <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${issue.severity === 'high' ? 'bg-red-500' : 'bg-yellow-500'}`} />
+                        <div>
+                          <p className="text-gray-900 font-medium">{issue.item}</p>
+                          <p className="text-gray-500 text-xs">Missing {issue.field} in {issue.type}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {analysis.recommendations && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations</h3>
+                  <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{analysis.recommendations}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
           <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">

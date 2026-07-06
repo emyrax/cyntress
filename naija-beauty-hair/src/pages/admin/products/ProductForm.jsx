@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { getDocument, addDocument, updateDocument } from '../../../firebase/firestore'
+import { getDocument, addDocument, updateDocument, getDocuments } from '../../../firebase/firestore'
+import { where, orderBy } from 'firebase/firestore'
 import MediaUploader from '../../../components/admin/MediaUploader'
 import SEOFields from '../../../components/admin/SEOFields'
+import RichTextEditor from '../../../components/admin/RichTextEditor'
+import AIButton from '../../../components/admin/AIButton'
 
 const emptyProduct = {
   title: '',
@@ -30,6 +33,12 @@ export default function ProductForm() {
   const [product, setProduct] = useState(emptyProduct)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [categories, setCategories] = useState([])
+
+  useEffect(() => {
+    getDocuments('categories', [where('type', '==', 'product'), orderBy('order', 'asc')])
+      .then(setCategories)
+  }, [])
 
   useEffect(() => {
     if (!isEdit) return
@@ -82,6 +91,14 @@ export default function ProductForm() {
   const removeVariant = (index) => {
     if (product.variants.length <= 1) return
     update('variants', product.variants.filter((_, i) => i !== index))
+  }
+
+  const handleAIResult = (result, mode) => {
+    if (mode === 'meta') {
+      update('seo', { ...product.seo, ...result })
+    } else {
+      update('description', result)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -152,19 +169,9 @@ export default function ProductForm() {
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
                 >
                   <option value="">Select category</option>
-                  <option value="glueless-wigs">Glueless Wigs</option>
-                  <option value="bob-wig">Bob Wig</option>
-                  <option value="straight-wig">Bone Straight Wigs</option>
-                  <option value="raw-wavy-wig">Raw Wavy Wig</option>
-                  <option value="original-curly-wig">Original Curly Wig</option>
-                  <option value="fringe-wig">Fringe Wig</option>
-                  <option value="short-cut-wig">Short Cut Wig</option>
-                  <option value="headband-wig-1">Headband Wig</option>
-                  <option value="hair-bundles">Hair Bundles</option>
-                  <option value="wig-combo">Wig Combo</option>
-                  <option value="undetectable-lace">Royal Lace</option>
-                  <option value="new-in">New Arrivals</option>
-                  <option value="hair-tools">Hair Tools</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.slug}>{c.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -203,13 +210,11 @@ export default function ProductForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={product.description}
-                onChange={(e) => update('description', e.target.value)}
-                rows={5}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold resize-y"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <AIButton modes={['enhance', 'sales', 'urgency', 'promo', 'seoRewrite']} fieldValue={product.description} contextTitle={product.title} onResult={handleAIResult} />
+              </div>
+              <RichTextEditor value={product.description} onChange={(v) => update('description', v)} minHeight="300px" />
             </div>
 
             <div>
@@ -309,10 +314,16 @@ export default function ProductForm() {
             />
           </div>
 
-          <SEOFields
-            seo={product.seo}
-            onChange={(seo) => update('seo', seo)}
-          />
+          <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-600">SEO</h2>
+              <AIButton modes={['meta']} fieldValue={`${product.title}\n\n${product.description?.replace(/<[^>]*>/g, '').slice(0, 1000)}`} contextTitle={product.title} onResult={handleAIResult} />
+            </div>
+            <SEOFields
+              seo={product.seo}
+              onChange={(seo) => update('seo', seo)}
+            />
+          </div>
 
           <div className="flex gap-3">
             <button

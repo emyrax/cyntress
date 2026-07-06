@@ -1,21 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
-import { getBlogPosts } from '../firebase/firestore'
-
-const categoryNames = {
-  'wig-tips': 'WIG TIPS',
-  'hair-care': 'HAIR CARE',
-  'hairstyle': 'HAIRSTYLE',
-  'cyntress-media': 'CYTRESS MEDIA',
-  'product-spotlight': 'PRODUCT SPOTLIGHT',
-  'customer-reviews': 'CUSTOMER REVIEWS',
-}
+import { query, where, orderBy, limit } from 'firebase/firestore'
+import { getBlogPosts, getDocuments } from '../firebase/firestore'
 
 export default function Blog() {
   const { category } = useParams()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [catName, setCatName] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -24,7 +17,14 @@ export default function Blog() {
       .finally(() => setLoading(false))
   }, [category])
 
-  const title = category ? categoryNames[category] || category : 'Blog'
+  useEffect(() => {
+    if (!category) { setCatName(null); return }
+    getDocuments('categories', [where('slug', '==', category), where('type', '==', 'blog'), limit(1)]).then((docs) => {
+      setCatName(docs[0]?.name || null)
+    })
+  }, [category])
+
+  const title = category ? (catName || category.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : 'Blog'
 
   return (
     <>

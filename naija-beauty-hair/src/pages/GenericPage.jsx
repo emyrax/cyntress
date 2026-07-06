@@ -55,11 +55,7 @@ export default function GenericPage() {
 
             <h1 className="text-3xl font-serif font-bold text-gray-900 mb-6">{title}</h1>
 
-            <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed">
-              {content.split('\n').map((line, i) => (
-                line ? <p key={i} className="mb-4">{line}</p> : <br key="i" />
-              ))}
-            </div>
+            <div className="prose prose-gray prose-headings:font-serif max-w-none text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: content }} />
           </>
         )}
       </div>
