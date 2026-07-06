@@ -4,3 +4,51 @@ Quick start:
 3. npm run dev (opens http://localhost:5173)
 4. Seed: node scripts/seed-firestore.js
 5. Register at /login, add UID to Firestore admins/{uid} with role: 'admin' to access /admin
+
+
+1. Authentication — Sign-in methods
+Provider	What to do
+Email/Password	✅ Already enabled (needed for login/register form)
+Google	✅ Already enabled
+Facebook	⏳ Enable → Enter your Facebook App ID + App Secret
+Apple	⏳ Enable → Configure Service ID + Apple Team ID + Key ID + Private Key
+Navigate: Authentication → Sign-in method → Add new provider
+2. Firestore — Create the collections
+The app reads/writes these collections. You don't need to create them manually (they auto-create on first write), but to see data immediately, you can seed them:
+Collection	Needed for
+products	Product listings & detail pages
+categories	Navigation categories
+banners	Homepage hero slider
+blogs	Blog posts
+orders	Customer orders
+newsletter_subscribers	Newsletter signups
+admins	Admin roles
+seo_settings	Global SEO settings
+pages	Static pages (About, FAQ, etc.)
+carts	Synced carts for logged-in users
+Navigate: Firestore Database → Create database (start in test mode, then tighten rules later).
+3. Storage — For image uploads
+The admin panels use MediaUploader to upload product/banner/post images.
+Setting	Value
+Storage bucket	Already in .env: cyntress-716aa.firebasestorage.app
+Security rules	Start with test mode (allow read/write), tighten later
+Navigate: Storage → Get started (choose test mode initially).
+4. Firestore Security Rules (recommended)
+When you're ready to lock things down, start with these permissive dev rules:
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+Quick Start Checklist
+[✅] Email/Password authentication
+[✅] Google authentication
+[⏳] Facebook authentication (need App ID)
+[⏳] Apple authentication (need Apple dev credentials)
+[⏳] Firestore database created
+[⏳] Storage bucket initialized
+[⏳] Add at least one product so the home page isn't empty
+The app will run without Facebook/Apple enabled (buttons will show an error if clicked), and without Storage (image uploads will fail). But Firestore and at least Email/Password auth are required for the app to function.

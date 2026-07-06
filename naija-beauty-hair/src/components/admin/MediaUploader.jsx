@@ -1,17 +1,18 @@
 import { useState, useRef } from 'react'
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
-import { storage } from '../../firebase/config'
+import { uploadToCloudinary } from '../../utils/cloudinary'
 
 export default function MediaUploader({
   images = [],
   onImagesChange,
-  path = 'products',
   maxFiles = 10,
   maxSizeMB = 5,
 }) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const inputRef = useRef(null)
+
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
 
   const handleUpload = async (files) => {
     const fileList = Array.from(files)
@@ -27,22 +28,16 @@ export default function MediaUploader({
       }
 
       setUploading(true)
-      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-      const storageRef = ref(storage, `${path}/${fileName}`)
-      const task = uploadBytesResumable(storageRef, file)
-
-      await new Promise((resolve, reject) => {
-        task.on(
-          'state_changed',
-          (snap) => setProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-          (err) => { alert('Upload failed'); reject(err) },
-          async () => {
-            const url = await getDownloadURL(task.snapshot.ref)
-            onImagesChange?.([...images, url])
-            resolve()
-          }
+      try {
+        const url = await uploadToCloudinary(
+          file,
+          { cloudName, uploadPreset },
+          (pct) => setProgress(pct)
         )
-      })
+        onImagesChange?.([...images, url])
+      } catch {
+        alert('Upload failed')
+      }
     }
 
     setUploading(false)

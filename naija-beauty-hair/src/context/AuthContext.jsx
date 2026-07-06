@@ -2,9 +2,13 @@ import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+  OAuthProvider,
 } from 'firebase/auth'
 import { auth } from '../firebase/config'
 import { doc, setDoc } from 'firebase/firestore'
@@ -37,12 +41,46 @@ export function AuthProvider({ children }) {
     return () => unsub()
   }, [])
 
+  async function ensureAdminProfile(firebaseUser) {
+    const existing = await getDocument('admins', firebaseUser.uid)
+    if (!existing) {
+      await setDoc(doc(db, 'admins', firebaseUser.uid), {
+        role: 'customer',
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName || '',
+        createdAt: new Date(),
+      })
+    }
+  }
+
   const login = (email, password) =>
     signInWithEmailAndPassword(auth, email, password)
 
   const register = async (email, password) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await setDoc(doc(db, 'admins', cred.user.uid), { role: 'admin', email, createdAt: new Date() })
+  }
+
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: 'select_account' })
+    const result = await signInWithPopup(auth, provider)
+    await ensureAdminProfile(result.user)
+    return result.user
+  }
+
+  const signInWithFacebook = async () => {
+    const provider = new FacebookAuthProvider()
+    const result = await signInWithPopup(auth, provider)
+    await ensureAdminProfile(result.user)
+    return result.user
+  }
+
+  const signInWithApple = async () => {
+    const provider = new OAuthProvider('apple.com')
+    const result = await signInWithPopup(auth, provider)
+    await ensureAdminProfile(result.user)
+    return result.user
   }
 
   const logout = () => signOut(auth)
@@ -57,7 +95,7 @@ export function AuthProvider({ children }) {
   const canAccess = (section) => permissions.includes(section)
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, role, loading, login, register, logout, resetPassword, isAdmin, permissions, canAccess }}>
+    <AuthContext.Provider value={{ user, userProfile, role, loading, login, register, signInWithGoogle, signInWithFacebook, signInWithApple, logout, resetPassword, isAdmin, permissions, canAccess }}>
       {children}
     </AuthContext.Provider>
   )
