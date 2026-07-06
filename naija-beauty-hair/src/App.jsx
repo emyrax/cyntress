@@ -32,6 +32,7 @@ import BannerForm from './pages/admin/banners/BannerForm'
 import OrderList from './pages/admin/orders/OrderList'
 import SEOSettings from './pages/admin/seo/SEOSettings'
 import PageEditor from './pages/admin/pages/PageEditor'
+import AdminUsers from './pages/admin/admins/AdminUsers'
 
 function PublicLayout({ children }) {
   return (
@@ -83,6 +84,7 @@ function AppRoutes() {
         <Route path="orders" element={<OrderList />} />
         <Route path="seo" element={<SEOSettings />} />
         <Route path="pages" element={<PageEditor />} />
+        <Route path="admins" element={<AdminUsers />} />
       </Route>
 
       <Route path="*" element={<PublicLayout><NotFound /></PublicLayout>} />

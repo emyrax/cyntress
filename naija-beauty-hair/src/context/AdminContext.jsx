@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 
 const AdminContext = createContext(null)
 
 export function AdminProvider({ children }) {
-  const { isAdmin, loading } = useAuth()
+  const { isAdmin, loading, canAccess } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -19,8 +20,14 @@ export function AdminProvider({ children }) {
     return <Navigate to="/login" replace />
   }
 
+  const section = location.pathname.replace('/admin/', '').split('/')[0] || 'dashboard'
+
+  if (section !== 'dashboard' && !canAccess(section)) {
+    return <Navigate to="/admin" replace />
+  }
+
   return (
-    <AdminContext.Provider value={{ isAdmin }}>
+    <AdminContext.Provider value={{ isAdmin, canAccess }}>
       {children}
     </AdminContext.Provider>
   )

@@ -8,7 +8,7 @@ import MobileNav from './MobileNav'
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const { user, logout } = useAuth()
+  const { user, logout, isAdmin } = useAuth()
   const { itemCount } = useCart()
   const location = useLocation()
 
@@ -79,8 +79,10 @@ export default function Header() {
                   </button>
                   <div className="absolute right-0 top-full bg-white shadow-lg border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 min-w-[160px] z-50">
                     <div className="py-2">
-                      <Link to="/admin" className="block px-4 py-2 text-sm text-gray-700 hover:text-gold hover:bg-gray-50">Dashboard</Link>
-                      <button onClick={logout} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:text-gold hover:bg-gray-50">Sign Out</button>
+                  {isAdmin && (
+                    <Link to="/admin" className="block px-4 py-2 text-sm text-gray-700 hover:text-gold hover:bg-gray-50">Dashboard</Link>
+                  )}
+                  <button onClick={logout} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:text-gold hover:bg-gray-50">Sign Out</button>
                     </div>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -10,6 +10,11 @@ import { auth } from '../firebase/config'
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '../firebase/config'
 import { getDocument } from '../firebase/firestore'
+
+const ROLE_PERMISSIONS = {
+  admin: ['dashboard', 'products', 'posts', 'banners', 'orders', 'seo', 'pages', 'admins'],
+  editor: ['dashboard', 'products', 'posts'],
+}
 
 const AuthContext = createContext(null)
 
@@ -45,10 +50,14 @@ export function AuthProvider({ children }) {
   const resetPassword = (email) =>
     sendPasswordResetEmail(auth, email)
 
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'editor'
+  const role = userProfile?.role || null
+  const isAdmin = role === 'admin' || role === 'editor'
+  const permissions = useMemo(() => ROLE_PERMISSIONS[role] || [], [role])
+
+  const canAccess = (section) => permissions.includes(section)
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, login, register, logout, resetPassword, isAdmin }}>
+    <AuthContext.Provider value={{ user, userProfile, role, loading, login, register, logout, resetPassword, isAdmin, permissions, canAccess }}>
       {children}
     </AuthContext.Provider>
   )

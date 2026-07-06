@@ -81,11 +81,12 @@ export const footerLinks = {
 }
 
 export const adminSidebar = [
-  { label: 'Dashboard', path: '/admin', icon: 'LayoutDashboard' },
-  { label: 'Products', path: '/admin/products', icon: 'Package' },
-  { label: 'Blog Posts', path: '/admin/posts', icon: 'FileText' },
-  { label: 'Banners', path: '/admin/banners', icon: 'Image' },
-  { label: 'Orders', path: '/admin/orders', icon: 'ShoppingCart' },
-  { label: 'SEO Settings', path: '/admin/seo', icon: 'Search' },
-  { label: 'Pages', path: '/admin/pages', icon: 'File' },
+  { label: 'Dashboard', path: '/admin', icon: 'LayoutDashboard', roles: ['admin', 'editor'] },
+  { label: 'Products', path: '/admin/products', icon: 'Package', roles: ['admin', 'editor'] },
+  { label: 'Blog Posts', path: '/admin/posts', icon: 'FileText', roles: ['admin', 'editor'] },
+  { label: 'Banners', path: '/admin/banners', icon: 'Image', roles: ['admin'] },
+  { label: 'Orders', path: '/admin/orders', icon: 'ShoppingCart', roles: ['admin'] },
+  { label: 'SEO Settings', path: '/admin/seo', icon: 'Search', roles: ['admin'] },
+  { label: 'Pages', path: '/admin/pages', icon: 'File', roles: ['admin'] },
+  { label: 'Admin Users', path: '/admin/admins', icon: 'Users', roles: ['admin'] },
 ]

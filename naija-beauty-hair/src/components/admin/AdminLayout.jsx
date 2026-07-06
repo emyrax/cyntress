@@ -10,11 +10,16 @@ const iconMap = {
   ShoppingCart: '🛒',
   Search: '🔍',
   File: '📄',
+  Users: '👤',
 }
 
 export default function AdminLayout() {
-  const { user, logout } = useAuth()
+  const { user, logout, role } = useAuth()
   const location = useLocation()
+
+  const visibleItems = adminSidebar.filter((item) =>
+    item.roles ? item.roles.includes(role) : true
+  )
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -26,7 +31,7 @@ export default function AdminLayout() {
         </div>
 
         <nav className="flex-1 py-4 overflow-y-auto">
-          {adminSidebar.map((item) => {
+          {visibleItems.map((item) => {
             const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
             return (
               <Link
@@ -45,8 +50,15 @@ export default function AdminLayout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
-          <div className="text-xs text-gray-500 mb-1 truncate">{user?.email}</div>
+        <div className="p-4 border-t border-gray-800 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 truncate flex-1">{user?.email}</span>
+            <span className={`text-[10px] font-medium uppercase px-1.5 py-0.5 rounded ${
+              role === 'admin' ? 'bg-gold text-ink' : 'bg-gray-700 text-gray-300'
+            }`}>
+              {role}
+            </span>
+          </div>
           <button
             onClick={logout}
             className="text-sm text-gray-400 hover:text-white transition-colors"
